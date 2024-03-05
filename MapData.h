@@ -12,8 +12,11 @@
 // For osmium::apply()
 #include <osmium/visitor.hpp>
 
-#include <QPainter>
+#include <iostream>
 #include <vector>
+#include <map>
+
+#include <QPainter>
 #include <QPainterPath>
 #include <QDebug>
 
@@ -30,54 +33,126 @@
 
 class MapData : public osmium::handler::Handler
 {
-    //osmium::memory::Buffer* node_locations = new osmium::memory::Buffer(32);
+    std::map<osmium::object_id_type, osmium::Location> m_nodeMap;
+
+//    osmium::Location m_smallectLoc = osmium::Location(30.6114013, 46.3426662);
+//    osmium::Location m_biggestLoc = osmium::Location(30.8313753, 46.6291187);
+    osmium::Location m_smallectLoc = osmium::Location(30.6114013, 46.3426662);
+    osmium::Location m_biggestLoc = osmium::Location(30.8313753, 46.6291187);
+
+    double           m_scaleX = 1800.0 / (m_biggestLoc.lon() - m_smallectLoc.lon());
+    double           m_scaleY = 950.0 / (m_biggestLoc.lat() - m_smallectLoc.lat());;
 public:
     std::vector<QPainterPath> m_pathVector;
 
     MapData()
-    {
-        m_pathVector.emplace_back();
-        m_pathVector.back().moveTo(50, 150);  // Start point
-        m_pathVector.back().lineTo(100, 50);
-
-        m_pathVector.emplace_back();
-        m_pathVector.back().moveTo(150, 200);  // Start point
-        m_pathVector.back().lineTo(300, 250);
-    }
+    {}
 
     void node(const osmium::Node& node) noexcept
     {
+        if (node.location())
+        {
+            m_nodeMap[node.id()] = node.location();
+        }
     }
+
 
     void way(osmium::Way& way) noexcept
     {
-        auto& nodes = way.nodes();
+        const char* name = way.tags()["name"];
+        if (name == nullptr) return;
 
-        for (const auto& nodeRef : nodes)
+        if (const auto* type = way.tags()["disused:route"]; type != nullptr && strcmp(type, "ferry") == 0 )
         {
-            try {
-                // Get the actual node using the node ID from the nodeRef
-                //auto node = node_locations->get<osmium::NodeRef>(nodeRef.ref());
+            return;
+        }
+        if (const auto* type = way.tags()["route"]; type != nullptr && strcmp(type, "ferry") == 0 )
+        {
+            return;
+        }
 
-                // Check if the node has a location
-                if (nodeRef.location())
+        qDebug() << "----------" << name << ' ' << way.nodes().size();
+        auto& tags = way.tags();
+        for( auto& tag : tags )
+        {
+            qDebug() << tag.key() << ' ' << tag.value();
+        }
+
+        osmium::Location prevLocation;
+        m_pathVector.emplace_back();
+
+        for (const auto& node_ref : way.nodes())
+        {
+            if (const auto it = m_nodeMap.find(node_ref.ref()); it != m_nodeMap.end())
+            {
+                double lon = (it->second.lon() - m_smallectLoc.lon()) * m_scaleX;
+                double lat = (it->second.lat() - m_smallectLoc.lat()) * m_scaleY;
+
+                if (prevLocation)
                 {
-                    qDebug() << "x:" << nodeRef.x();
-                    qDebug() << "y:" << nodeRef.y();
-                    qDebug() << "lon:" << nodeRef.lon();
-                    qDebug() << "lat:" << nodeRef.lat();
+                    m_pathVector.back().lineTo(lon, lat);
+                    m_pathVector.back().moveTo(lon, lat);
                 }
-                else {
-                    //qDebug() << "Node has invalid or missing location information";
+                else
+                {
+                    m_pathVector.back().moveTo(lon, lat);
                 }
-            } catch (const std::exception& e) {
-                qDebug() << "Exception while accessing coordinates:" << e.what();
+
+                prevLocation = it->second;
             }
         }
     }
 
-    void relation(const osmium::Relation& relation) noexcept {
+    void relation(const osmium::Relation& relation) noexcept
+    {
+        if (const auto* type = relation.tags()["type"]; type == nullptr || strcmp(type, "route") != 0)
+        {
+            return;
+        }
+
+        const char* name = relation.tags()["name"];
+        if ( name != nullptr )
+        {
+            qDebug() << "----------" << name << ' ' << relation.members().size();
+            auto& tags = relation.tags();
+            for( auto& tag : tags )
+            {
+                qDebug() << tag.key() << ' ' << tag.value();
+            }
+        }
+
+        osmium::Location prevLocation;
+        m_pathVector.emplace_back();
+
+        for (const auto& node_ref : relation.members())
+        {
+            const auto& object = node_ref.get_object();
+            if (!object.is_compatible_to(osmium::item_type::node))
+            {
+                continue;
+            }
+
+            if (const auto it = m_nodeMap.find(node_ref.ref()); it != m_nodeMap.end())
+            {
+                double lon = (it->second.lon() - m_smallectLoc.lon()) * m_scaleX;
+                double lat = (it->second.lat() - m_smallectLoc.lat()) * m_scaleY;
+
+                if (prevLocation)
+                {
+                    m_pathVector.back().lineTo(lon, lat);
+                    m_pathVector.back().moveTo(lon, lat);
+                }
+                else
+                {
+                    m_pathVector.back().moveTo(lon, lat);
+                }
+
+                prevLocation = it->second;
+            }
+        }
     }
+
+    void read();
 };
 
 

@@ -9,19 +9,19 @@
 class MapWidget : public QWidget
 {
     MapData m_mapData;
+
+    double m_xOffset;
+    double m_yOffset;
+
+    double m_xScale;
+    double m_yScale;
 public:
     MapWidget(QWidget *parent = nullptr) : QWidget(parent)
+    {}
+
+    void setupWidget()
     {
-        const osmium::io::File input_file{"/home/vitaliykolbasiuk/Downloads/odesa_oblast.osm.pbf"};
-        osmium::io::Reader reader{input_file, osmium::osm_entity_bits::type::all};
-
-        // Create an instance of our own CountHandler and push the data from the
-        // input file through it.
-        osmium::apply(reader, m_mapData);
-
-        // You do not have to close the Reader explicitly, but because the
-        // destructor can't throw, you will not see any errors otherwise.
-        reader.close();
+        m_mapData.read();
     }
 
 protected:
@@ -29,9 +29,12 @@ protected:
         Q_UNUSED(event);
 
         QPainter painter(this);
-        QPen pen(Qt::blue);
-        pen.setWidth(2);
+        QPen pen(Qt::yellow);
+
+        pen.setWidth(1);
         painter.setPen(pen);
+        painter.translate(0, height());
+        painter.scale(1.0, -1.0);
 
         for (const auto& path : m_mapData.m_pathVector)
         {

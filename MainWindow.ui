@@ -17,10 +17,10 @@
    <widget class="MapWidget" name="widget" native="true">
     <property name="geometry">
      <rect>
-      <x>190</x>
-      <y>140</y>
-      <width>351</width>
-      <height>241</height>
+      <x>10</x>
+      <y>10</y>
+      <width>781</width>
+      <height>551</height>
      </rect>
     </property>
    </widget>
